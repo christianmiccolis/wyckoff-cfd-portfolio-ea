@@ -1,3 +1,6 @@
+# Wyckoff CFD Portfolio Strategy - riferimento Python
+# Christian Miccolis - Beriv Consulting
+
 import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo

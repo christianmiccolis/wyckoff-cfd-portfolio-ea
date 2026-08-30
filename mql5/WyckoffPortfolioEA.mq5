@@ -42,7 +42,7 @@
 //|  simboli custom, InpServerToRomeOffsetHours va messo a 0 (i       |
 //|  timestamp del CSV importato sono gia' in ora di Roma).           |
 //+------------------------------------------------------------------+
-#property copyright "Ricerca strategia indici CFD"
+#property copyright "Christian Miccolis - Beriv Consulting"
 #property version   "1.02"
 #property strict
 
