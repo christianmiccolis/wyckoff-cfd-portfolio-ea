@@ -4,6 +4,8 @@
 
 MetaTrader 5 EA and Python reference implementation for a mean-reversion strategy (Bollinger Bands + Keltner Channels + Wyckoff Spring) on a portfolio of 7 CFD indices (SP500, NASDAQ100, DOWJONES, DAX40, CAC40, NIKKEI225, EUROSTOXX50), with a volatility regime filter, a macro news filter (NFP/FOMC), and optional volatility targeting.
 
+> **Disclaimer**: This is not financial advice. This repository is provided for educational and research purposes only. CFD trading involves substantial risk and can result in the loss of your invested capital; it is not suitable for all investors. Backtested performance does not guarantee future results — markets change, and a strategy that worked in the past may not work going forward. You are solely responsible for any trading decisions and outcomes if you choose to use this code. Always test thoroughly on a demo account before considering real funds, and never risk money you cannot afford to lose.
+
 ## Performance
 
 Validated both on the Python reference and on a native MetaTrader 5 backtest (Strategy Tester), with numbers reconciled between the two sources.
