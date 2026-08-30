@@ -2,81 +2,81 @@
 
 *Christian Miccolis — Beriv Consulting*
 
-EA per MetaTrader 5 e riferimento Python per una strategia mean-reversion (Bollinger Bands + Keltner Channels + Wyckoff Spring) su un paniere di 7 indici CFD (SP500, NASDAQ100, DOWJONES, DAX40, CAC40, NIKKEI225, EUROSTOXX50), con filtro di regime, filtro news macro (NFP/FOMC) e vol-targeting opzionale.
+MetaTrader 5 EA and Python reference implementation for a mean-reversion strategy (Bollinger Bands + Keltner Channels + Wyckoff Spring) on a portfolio of 7 CFD indices (SP500, NASDAQ100, DOWJONES, DAX40, CAC40, NIKKEI225, EUROSTOXX50), with a volatility regime filter, a macro news filter (NFP/FOMC), and optional volatility targeting.
 
 ## Performance
 
-Validata sia sul riferimento Python sia su backtest nativo MetaTrader 5 (Strategy Tester), con numeri riconciliati tra le due fonti.
+Validated both on the Python reference and on a native MetaTrader 5 backtest (Strategy Tester), with numbers reconciled between the two sources.
 
-**MT5 nativo, storico completo 2012-2026** (leva fissa, rischio 1,34%/trade):
+**Native MT5, full history 2012-2026** (fixed leverage, 1.34% risk per trade):
 
-| | Con filtro news (NFP+FOMC) | Senza filtro |
+| | With news filter (NFP+FOMC) | No filter |
 |---|---|---|
-| Rendimento totale | **+156,7%** | +122,9% |
-| Profit Factor | **1,40** | 1,30 |
-| Sharpe | **1,12** | 0,92 |
-| Max Drawdown (equità) | **-25,5%** | -29,4% |
-| Win rate | 52,4% | 51,4% |
+| Total return | **+156.7%** | +122.9% |
+| Profit Factor | **1.40** | 1.30 |
+| Sharpe | **1.12** | 0.92 |
+| Max Drawdown (equity) | **-25.5%** | -29.4% |
+| Win rate | 52.4% | 51.4% |
 
-**Riferimento Python, periodo di validazione 2020-2026:**
+**Python reference, validation period 2020-2026:**
 
-| | Con filtro news | Senza filtro |
+| | With news filter | No filter |
 |---|---|---|
-| CAGR | **16,1%/anno** | 15,5%/anno |
-| Max Drawdown | **-15,6%** | -19,0% |
+| CAGR | **16.1%/year** | 15.5%/year |
+| Max Drawdown | **-15.6%** | -19.0% |
 
-Il filtro news (NFP+FOMC) migliora ogni metrica rispetto a non averlo, a parità di tutto il resto — è attivo di default nell'EA.
+The news filter (NFP+FOMC) improves every metric compared to not having it, all else equal — it's enabled by default in the EA.
 
-Questo repository documenta metodo e risultati con rigore — doppia validazione Python/MT5, bug reali trovati e corretti durante lo sviluppo, calendario news da fonti ufficiali. Nessuna garanzia di profittabilità futura.
+This repository documents method and results rigorously — dual Python/MT5 validation, real bugs found and fixed during development, a news calendar built from official sources. No guarantee of future profitability.
 
-## Cosa c'è dentro
+## What's inside
 
 ```
 mql5/
-  WyckoffPortfolioEA.mq5      Expert Advisor per MetaTrader 5 (portafoglio 7 simboli)
+  WyckoffPortfolioEA.mq5      MetaTrader 5 Expert Advisor (7-symbol portfolio)
 python/
-  backtest_reference.py       Riferimento Python indipendente (stessa logica di segnale)
+  backtest_reference.py       Independent Python reference (same signal logic)
 ```
 
-### L'EA (`mql5/WyckoffPortfolioEA.mq5`)
+### The EA (`mql5/WyckoffPortfolioEA.mq5`)
 
-- Segnale: prezzo sotto la banda di Bollinger (20, 2σ) O sotto il canale di Keltner (EMA20 ± 2×ATR14) O uno "spring" in stile Wyckoff, sempre con prezzo sopra la MA200 (solo long, solo in uptrend)
-- Filtro di regime: nessun nuovo trade quando la volatilità (percentile ATR%/prezzo a 252 giorni del simbolo di riferimento) è sopra la soglia storica del 50°
-- Filtro news: nessun nuovo ingresso nei giorni di rilascio NFP o riunione FOMC (293 date 2012-2026, fonti ufficiali BLS/Federal Reserve — validato: migliora CAGR e riduce il drawdown rispetto a non avere il filtro)
-- Uscita: stop a 1,5×ATR, target 1,5R, oppure chiusura a tempo dopo 15 giorni di holding massimo
-- Position sizing: rischio fisso 1,34% dell'equity per trade, con vol-targeting dinamico opzionale (leva 0,4x-3x calibrata sulla volatilità realizzata dell'equity)
+- Signal: price below the Bollinger Band (20, 2σ) OR below the Keltner Channel (EMA20 ± 2×ATR14) OR a Wyckoff-style "spring", always with price above the MA200 (long-only, uptrend-only)
+- Regime filter: no new trades when volatility (252-day ATR%/price percentile of the reference symbol) is above the 50th historical percentile
+- News filter: no new entries on NFP release days or FOMC meeting days (293 dates 2012-2026, from official BLS/Federal Reserve sources — validated: improves CAGR and reduces drawdown compared to not having it)
+- Exit: stop at 1.5×ATR, target at 1.5R, or time-based close after 15 days of maximum holding
+- Position sizing: fixed 1.34% equity risk per trade, with optional dynamic volatility targeting (0.4x-3x leverage calibrated on realized equity volatility)
 
-**Prima di usarlo**: leggi i commenti in testa al file — documentano bug reali trovati durante lo sviluppo (modalità di riempimento ordini, offset orario Tester vs live, guardie contro dati anomali) e la raccomandazione di verificare l'offset orario dal vivo prima di operare su un conto reale.
+**Before using it**: read the comments at the top of the file — they document real bugs found during development (order filling mode, Tester vs. live time offset, guards against anomalous data) and the recommendation to verify the time offset live before trading a real account.
 
-### Il riferimento Python (`python/backtest_reference.py`)
+### The Python reference (`python/backtest_reference.py`)
 
-Backtest indipendente sulla stessa logica di segnale, usato per validare l'EA (i due, alla fine del lavoro, convergono entro un margine ragionevole su trade totali e rendimento). Richiede dati storici H1 per i 7 indici in una cartella `data/` (non inclusi in questo repository — vedi sotto).
+Independent backtest on the same signal logic, used to validate the EA (the two, by the end of the work, converge within a reasonable margin on total trades and return). Requires H1 historical data for the 7 indices in a `data/` folder (not included in this repository — see below).
 
 ```bash
 pip install pandas numpy
-python python/backtest_reference.py nfpfomc   # con filtro news (consigliato)
-python python/backtest_reference.py none      # senza filtro, per confronto
+python python/backtest_reference.py nfpfomc   # with news filter (recommended)
+python python/backtest_reference.py none      # without filter, for comparison
 ```
 
-## Dati necessari (non inclusi)
+## Required data (not included)
 
-Lo storico usato per lo sviluppo è H1 2012-2026 per i 7 indici, originariamente da Dukascopy. Non è incluso in questo repository (dimensione, licenza dei dati). Per riprodurre i risultati serve un CSV per simbolo in `python/data/{SIMBOLO}_H1.csv` con colonne `timestamp,open,high,low,close,volume` (timestamp UTC).
+The historical data used for development is H1 2012-2026 for the 7 indices, originally sourced from Dukascopy. It is not included in this repository (size, data licensing). To reproduce the results you need one CSV per symbol in `python/data/{SYMBOL}_H1.csv` with columns `timestamp,open,high,low,close,volume` (UTC timestamps).
 
-Per l'EA, gli stessi dati vanno importati in MT5 come **simboli custom** (`CustomSymbolCreate` + `CustomRatesUpdate`) — i simboli reali della maggior parte dei broker non hanno storico sufficientemente lungo, e gli spread live variano troppo da broker a broker per un confronto pulito. Con simboli custom, imposta `InpServerToRomeOffsetHours = 0` (i timestamp del CSV sono già in ora di Roma); con simboli reali del tuo broker, ricalibra l'offset dal vivo come spiegato nei commenti dell'EA.
+For the EA, the same data needs to be imported into MT5 as **custom symbols** (`CustomSymbolCreate` + `CustomRatesUpdate`) — most brokers' real symbols don't have sufficiently long history, and live spreads vary too much broker to broker for a clean comparison. With custom symbols, set `InpServerToRomeOffsetHours = 0` (the CSV timestamps are already in Rome time); with your broker's real symbols, recalibrate the offset live as explained in the EA's comments.
 
-## Metodologia
+## Methodology
 
-- **Spread**: assunzioni fisse per simbolo (SP500 0,90 punti, NASDAQ100 0,70, DOWJONES 0,80, DAX40 0,80, CAC40 1,04 punti — confermati da un conto reale; NIKKEI225 15,0 e EUROSTOXX50 2,0 restano stime prudenti mai confermate)
-- **Filtro news**: testato anche un set esteso (+CPI, +PCE, +GDP, +Jackson Hole, +testimonianza semestrale Fed) — *peggiora* i risultati (blocca troppi giorni e toglie edge a una strategia mean-reversion, che cattura proprio i rimbalzi dopo gli eccessi di prezzo che quegli eventi spesso generano). Il filtro attivo di default usa solo NFP+FOMC.
-- **Validazione**: risultati confrontati sia sul riferimento Python sia su backtest nativo MetaTrader 5 (Strategy Tester, modello OHLC a 1 minuto), con numeri riconciliati tra le due fonti.
+- **Spread**: fixed assumptions per symbol (SP500 0.90 points, NASDAQ100 0.70, DOWJONES 0.80, DAX40 0.80, CAC40 1.04 points — confirmed from a real account; NIKKEI225 15.0 and EUROSTOXX50 2.0 remain conservative estimates, never confirmed)
+- **News filter**: an extended set was also tested (+CPI, +PCE, +GDP, +Jackson Hole, +Fed Chair semi-annual testimony) — it *worsens* the results (blocks too many days and removes edge from a mean-reversion strategy, which specifically captures the rebounds after the price excesses those events often generate). The default active filter uses only NFP+FOMC.
+- **Validation**: results compared both on the Python reference and on a native MetaTrader 5 backtest (Strategy Tester, 1-minute OHLC model), with numbers reconciled between the two sources.
 
-## Limitazioni note
+## Known limitations
 
-- Nessun costo di slippage oltre allo spread fisso assunto
-- Spread di NIKKEI225 ed EUROSTOXX50 mai confermati su un conto reale
-- Il vol-targeting dinamico non è stato testato in combinazione con il filtro news
-- Backtest, non trading live: nessuna garanzia che il comportamento futuro replichi quello storico
+- No slippage cost beyond the assumed fixed spread
+- NIKKEI225 and EUROSTOXX50 spreads never confirmed on a real account
+- Dynamic volatility targeting has not been tested in combination with the news filter
+- Backtest, not live trading: no guarantee that future behavior will replicate historical behavior
 
-## Licenza
+## License
 
-MIT — vedi [LICENSE](LICENSE). Codice fornito a scopo di ricerca/didattico, nessuna garanzia di profittabilità.
+MIT — see [LICENSE](LICENSE). Code provided for research/educational purposes, no guarantee of profitability.

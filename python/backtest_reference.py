@@ -1,21 +1,22 @@
-# Wyckoff CFD Portfolio Strategy - riferimento Python
+# Wyckoff CFD Portfolio Strategy - Python reference
 # Christian Miccolis - Beriv Consulting
 
+import os
+import sys
 import pandas as pd
 import numpy as np
 from zoneinfo import ZoneInfo
-import sys
 
-INDICI_7 = ["SP500","NASDAQ100","DOWJONES","DAX40","CAC40","NIKKEI225","EUROSTOXX50"]
+INDICES_7 = ["SP500","NASDAQ100","DOWJONES","DAX40","CAC40","NIKKEI225","EUROSTOXX50"]
 CUTOFF = pd.Timestamp("2020-01-01")
 MAX_HOLDING_H1_BARS = 15*24
-SPREAD_PUNTI = {"SP500":0.90, "NASDAQ100":0.70, "DOWJONES":0.80, "DAX40":0.80, "CAC40":1.04,
-                "NIKKEI225":15.0, "EUROSTOXX50":2.0}
-SOGLIA_REGIME = 0.50
-WYCKOFF_ESCLUSI = {"NIKKEI225"}
-ROMA = ZoneInfo("Europe/Rome")
+SPREAD_POINTS = {"SP500":0.90, "NASDAQ100":0.70, "DOWJONES":0.80, "DAX40":0.80, "CAC40":1.04,
+                 "NIKKEI225":15.0, "EUROSTOXX50":2.0}
+REGIME_THRESHOLD = 0.50
+WYCKOFF_EXCLUDED = {"NIKKEI225"}
+ROME = ZoneInfo("Europe/Rome")
 
-MODE = sys.argv[1] if len(sys.argv) > 1 else "nfpfomc"  # "none" | "nfpfomc" (consigliato) | "extended" (peggiora i risultati, vedi README)
+MODE = sys.argv[1] if len(sys.argv) > 1 else "nfpfomc"  # "none" | "nfpfomc" (recommended) | "extended" (worsens results, see README)
 
 NFP_DATES = """
 2012-01-06 2012-02-03 2012-03-09 2012-04-06 2012-05-04 2012-06-01 2012-07-06 2012-08-03 2012-09-07 2012-10-05 2012-11-02 2012-12-07
@@ -53,7 +54,7 @@ FOMC_DATES = """
 2026-01-28 2026-03-18 2026-04-29 2026-06-17 2026-07-29
 """.split()
 
-# CPI: "anno: mm-dd mm-dd ..."
+# CPI: "year: mm-dd mm-dd ..."
 CPI_RAW = """
 2012: 01-19 02-17 03-16 04-13 05-15 06-14 07-17 08-15 09-14 10-16 11-15 12-14
 2013: 01-16 02-21 03-15 04-16 05-16 06-18 07-16 08-15 09-17 10-30 11-20 12-17
@@ -108,7 +109,7 @@ GDP_DATES = """
 2026-02-20 2026-04-30 2026-07-30
 """.split()
 
-# Jackson Hole: range (blocchiamo tutto il periodo)
+# Jackson Hole: date ranges (we block the entire period)
 JACKSON_HOLE_RANGES = [
     ("2012-08-30","2012-09-01"), ("2013-08-21","2013-08-24"), ("2014-08-21","2014-08-23"),
     ("2015-08-27","2015-08-29"), ("2016-08-25","2016-08-27"), ("2017-08-24","2017-08-26"),
@@ -174,7 +175,7 @@ elif MODE == "nfpfomc":
 else:
     NEWS_DATES = NEWS_DATES_EXTENDED
 
-print(f"Modalita': {MODE} | giorni news bloccati nel periodo: {len(NEWS_DATES)}")
+print(f"Mode: {MODE} | news days blocked in period: {len(NEWS_DATES)}")
 
 
 def compute_atr(df, period=14):
@@ -183,26 +184,26 @@ def compute_atr(df, period=14):
     tr = pd.concat([high-low,(high-prev_close).abs(),(low-prev_close).abs()],axis=1).max(axis=1)
     return tr.rolling(period).mean()
 
-DATA_DIR = "data"  # cartella con {sym}_H1.csv per ciascuno dei 7 indici, vedi README
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")  # python/data/, see README
 
-def carica_duka_h1(sym):
+def load_duka_h1(sym):
     df = pd.read_csv(f"{DATA_DIR}/{sym}_H1.csv", parse_dates=["timestamp"])
-    df["timestamp"] = df["timestamp"].dt.tz_convert(ROMA).dt.tz_localize(None)
+    df["timestamp"] = df["timestamp"].dt.tz_convert(ROME).dt.tz_localize(None)
     df = df.set_index("timestamp").sort_index()
     return df[["open","high","low","close","volume"]]
 
 h1_data = {}
-daily_filtri = {}
+daily_filters = {}
 
-sp500_h1 = carica_duka_h1("SP500")
+sp500_h1 = load_duka_h1("SP500")
 sp500_daily = sp500_h1.resample("1D").agg({"open":"first","high":"max","low":"min","close":"last"}).dropna()
 sp500_daily["atr14"] = compute_atr(sp500_daily, 14)
 sp500_daily["atr_pct_price"] = sp500_daily["atr14"]/sp500_daily["close"]
 sp500_daily["atr_percentile"] = sp500_daily["atr_pct_price"].rolling(252).rank(pct=True)
 regime_sp500 = sp500_daily[["atr_percentile"]].shift(1)
 
-for sym in INDICI_7:
-    h1 = carica_duka_h1(sym)
+for sym in INDICES_7:
+    h1 = load_duka_h1(sym)
     h1_data[sym] = h1
     daily = h1.resample("1D").agg({"open":"first","high":"max","low":"min","close":"last","volume":"sum"}).dropna()
     daily["atr14"] = compute_atr(daily, 14)
@@ -215,17 +216,17 @@ for sym in INDICI_7:
     range_low_20 = daily["low"].rolling(20).min()
     range_high_20 = daily["high"].rolling(20).max()
     range_pct = (range_high_20-range_low_20)/daily["close"]
-    range_stretta = range_pct < range_pct.rolling(100, min_periods=30).median()
+    tight_range = range_pct < range_pct.rolling(100, min_periods=30).median()
     vol_avg20 = daily["volume"].rolling(20).mean()
     spring_raw = (daily["low"] < range_low_20.shift(1)) & (daily["close"] > range_low_20.shift(1)) & \
-                 range_stretta.shift(1) & (daily["volume"] > 1.5*vol_avg20.shift(1))
-    daily["wyckoff_raw"] = spring_raw if sym not in WYCKOFF_ESCLUSI else False
+                 tight_range.shift(1) & (daily["volume"] > 1.5*vol_avg20.shift(1))
+    daily["wyckoff_raw"] = spring_raw if sym not in WYCKOFF_EXCLUDED else False
 
-    filtri = daily[["atr14","ma200","bb_lower","kc_lower","wyckoff_raw"]].shift(1)
-    filtri = filtri.join(regime_sp500, how="left").ffill()
-    daily_filtri[sym] = filtri
+    filters = daily[["atr14","ma200","bb_lower","kc_lower","wyckoff_raw"]].shift(1)
+    filters = filters.join(regime_sp500, how="left").ffill()
+    daily_filters[sym] = filters
 
-def simula_fisso(h1, entry_idx, entry, sl, tp):
+def simulate_fixed(h1, entry_idx, entry, sl, tp):
     for j in range(entry_idx+1, min(entry_idx+1+MAX_HOLDING_H1_BARS, len(h1))):
         row = h1.iloc[j]
         if row["low"]<=sl: return "sl_hit", sl, j-entry_idx
@@ -233,65 +234,65 @@ def simula_fisso(h1, entry_idx, entry, sl, tp):
     j_max = min(entry_idx+MAX_HOLDING_H1_BARS, len(h1)-1)
     return "time_exit", h1.iloc[j_max]["close"], j_max-entry_idx
 
-tutti = []
-saltati_per_news = 0
-for sym in INDICI_7:
+all_trades = []
+skipped_for_news = 0
+for sym in INDICES_7:
     h1 = h1_data[sym]
-    filtri_su_h1 = daily_filtri[sym].reindex(h1.index, method="ffill")
-    ora = pd.Series(h1.index, index=h1.index).dt.hour
-    dentro = (ora>=9)&(ora<20)
-    in_pos_fino = None
+    filters_on_h1 = daily_filters[sym].reindex(h1.index, method="ffill")
+    hour = pd.Series(h1.index, index=h1.index).dt.hour
+    within_window = (hour>=9)&(hour<20)
+    in_position_until = None
     for i in range(24*30, len(h1)-1):
-        if in_pos_fino is not None and h1.index[i] < in_pos_fino: continue
-        if not dentro.iloc[i]: continue
-        atr=filtri_su_h1["atr14"].iloc[i]; ma200=filtri_su_h1["ma200"].iloc[i]
-        bbl=filtri_su_h1["bb_lower"].iloc[i]; kcl=filtri_su_h1["kc_lower"].iloc[i]
-        wyckoff=filtri_su_h1["wyckoff_raw"].iloc[i]; regime=filtri_su_h1["atr_percentile"].iloc[i]
+        if in_position_until is not None and h1.index[i] < in_position_until: continue
+        if not within_window.iloc[i]: continue
+        atr=filters_on_h1["atr14"].iloc[i]; ma200=filters_on_h1["ma200"].iloc[i]
+        bbl=filters_on_h1["bb_lower"].iloc[i]; kcl=filters_on_h1["kc_lower"].iloc[i]
+        wyckoff=filters_on_h1["wyckoff_raw"].iloc[i]; regime=filters_on_h1["atr_percentile"].iloc[i]
         if pd.isna(atr) or pd.isna(ma200) or pd.isna(regime): continue
-        if regime>=SOGLIA_REGIME: continue
-        prezzo = h1.iloc[i]["close"]
-        segnale = False
-        if not pd.isna(bbl) and prezzo>ma200 and prezzo<bbl: segnale=True
-        if not pd.isna(kcl) and prezzo>ma200 and prezzo<kcl: segnale=True
-        if not pd.isna(wyckoff) and bool(wyckoff) and prezzo>ma200: segnale=True
-        if not segnale: continue
+        if regime>=REGIME_THRESHOLD: continue
+        price = h1.iloc[i]["close"]
+        signal = False
+        if not pd.isna(bbl) and price>ma200 and price<bbl: signal=True
+        if not pd.isna(kcl) and price>ma200 and price<kcl: signal=True
+        if not pd.isna(wyckoff) and bool(wyckoff) and price>ma200: signal=True
+        if not signal: continue
         if h1.index[i].date() in NEWS_DATES:
-            saltati_per_news += 1
+            skipped_for_news += 1
             continue
-        entry=prezzo; sl=entry-1.5*atr; risk=entry-sl
+        entry=price; sl=entry-1.5*atr; risk=entry-sl
         if risk<=0: continue
         tp=entry+1.5*risk
-        outcome, exit_price, barre = simula_fisso(h1, i, entry, sl, tp)
+        outcome, exit_price, bars = simulate_fixed(h1, i, entry, sl, tp)
         r_result = 1.5 if outcome=="tp_hit" else (-1.0 if outcome=="sl_hit" else (exit_price-entry)/risk)
-        costo_spread_r = SPREAD_PUNTI[sym]/risk
-        r_netto = np.clip(r_result,-10,10) - costo_spread_r
-        entry_time=h1.index[i]; exit_time=h1.index[min(i+barre, len(h1)-1)]
-        tutti.append({"symbol":sym,"entry":entry_time,"exit":exit_time,"r_netto":r_netto})
-        in_pos_fino = exit_time
+        spread_cost_r = SPREAD_POINTS[sym]/risk
+        net_r = np.clip(r_result,-10,10) - spread_cost_r
+        entry_time=h1.index[i]; exit_time=h1.index[min(i+bars, len(h1)-1)]
+        all_trades.append({"symbol":sym,"entry":entry_time,"exit":exit_time,"net_r":net_r})
+        in_position_until = exit_time
 
-df = pd.DataFrame(tutti).sort_values("entry").reset_index(drop=True)
-print(f"Trade totali: {len(df)} | Segnali saltati per news: {saltati_per_news}")
-sviluppo = df[df["entry"]<CUTOFF]; validazione = df[df["entry"]>=CUTOFF]
-print(f"Sviluppo (<2020): n={len(sviluppo)} netto={sviluppo['r_netto'].mean():+.3f}R winrate={100*(sviluppo['r_netto']>0).mean():.1f}%")
-print(f"Validazione (>=2020): n={len(validazione)} netto={validazione['r_netto'].mean():+.3f}R winrate={100*(validazione['r_netto']>0).mean():.1f}%\n")
+df = pd.DataFrame(all_trades).sort_values("entry").reset_index(drop=True)
+print(f"Total trades: {len(df)} | Signals skipped for news: {skipped_for_news}")
+development = df[df["entry"]<CUTOFF]; validation = df[df["entry"]>=CUTOFF]
+print(f"Development (<2020): n={len(development)} net={development['net_r'].mean():+.3f}R winrate={100*(development['net_r']>0).mean():.1f}%")
+print(f"Validation (>=2020): n={len(validation)} net={validation['net_r'].mean():+.3f}R winrate={100*(validation['net_r']>0).mean():.1f}%\n")
 
 equity = 10000.0
 curve = [(df["entry"].iloc[0], equity)]
 for _, row in df.iterrows():
-    equity += row["r_netto"]*(equity*0.0134)
+    equity += row["net_r"]*(equity*0.0134)
     curve.append((row["entry"], equity))
-curva = pd.Series([c[1] for c in curve], index=[c[0] for c in curve])
-curva_g = curva.resample("1D").last().ffill()
+equity_curve = pd.Series([c[1] for c in curve], index=[c[0] for c in curve])
+daily_curve = equity_curve.resample("1D").last().ffill()
 
-dd = (curva_g-curva_g.cummax())/curva_g.cummax()*100
-print(f"Drawdown peggiore: {dd.min():.1f}% il {dd.idxmin().date()}")
-print(f"Equity finale: {curva_g.iloc[-1]:.0f}  (partenza {curva_g.iloc[0]:.0f})")
-print(f"Win rate complessivo: {100*(df['r_netto']>0).mean():.1f}%  R medio: {df['r_netto'].mean():+.3f}")
+dd = (daily_curve-daily_curve.cummax())/daily_curve.cummax()*100
+print(f"Worst drawdown: {dd.min():.1f}% on {dd.idxmin().date()}")
+print(f"Final equity: {daily_curve.iloc[-1]:.0f}  (starting {daily_curve.iloc[0]:.0f})")
+print(f"Overall win rate: {100*(df['net_r']>0).mean():.1f}%  Average R: {df['net_r'].mean():+.3f}")
 
-val_curva = curva_g[curva_g.index>=CUTOFF]
-if len(val_curva) > 1:
-    rend_val = 100*(val_curva.iloc[-1]/val_curva.iloc[0]-1)
-    anni_val = (val_curva.index[-1]-val_curva.index[0]).days/365.25
-    cagr_val = 100*((val_curva.iloc[-1]/val_curva.iloc[0])**(1/anni_val)-1)
-    dd_val = (val_curva-val_curva.cummax())/val_curva.cummax()*100
-    print(f"\nValidazione 2020-2026: rendimento={rend_val:+.1f}% CAGR={cagr_val:.1f}%/anno MaxDD={dd_val.min():.1f}%")
+val_curve = daily_curve[daily_curve.index>=CUTOFF]
+if len(val_curve) > 1:
+    return_val = 100*(val_curve.iloc[-1]/val_curve.iloc[0]-1)
+    years_val = (val_curve.index[-1]-val_curve.index[0]).days/365.25
+    cagr_val = 100*((val_curve.iloc[-1]/val_curve.iloc[0])**(1/years_val)-1)
+    dd_val = (val_curve-val_curve.cummax())/val_curve.cummax()*100
+    print(f"\nValidation 2020-2026: return={return_val:+.1f}% CAGR={cagr_val:.1f}%/year MaxDD={dd_val.min():.1f}%")
