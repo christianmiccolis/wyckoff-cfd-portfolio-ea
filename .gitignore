@@ -1,0 +1,21 @@
+# Dati storici (troppo pesanti / licenza dati non ridistribuibile)
+python/data/
+*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# File generati dal Tester / stato locale
+wyckoff_portfolio_equity.csv
+*.set
+*.htm
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
